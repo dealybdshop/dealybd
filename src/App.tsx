@@ -65,6 +65,22 @@ const initialPromoCodes: PromoCode[] = [
 
 
 export default function App() {
+  // Sync state loaded from Express backend database (db.json)
+  const [isSyncInitDone, setIsSyncInitDone] = useState(false);
+
+  const syncToServer = async (key: string, data: any) => {
+    if (!isSyncInitDone) return;
+    try {
+      await fetch('/api/db/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, data })
+      });
+    } catch (err) {
+      console.error(`Syncing error for key ${key}:`, err);
+    }
+  };
+
   // Global Persisted States with lazy initializers for flawless loading
   const [panelRole, setPanelRole] = useState<'admin' | 'user' | null>(() => {
     try {
@@ -371,6 +387,265 @@ export default function App() {
       return 100;
     }
   });
+
+  // Load initial database state from Express server on boot
+  useEffect(() => {
+    const loadServerData = async () => {
+      try {
+        const res = await fetch("/api/db/get");
+        const json = await res.json();
+        if (json.success && json.data) {
+          const db = json.data;
+          
+          if (db.users) setUsers(db.users);
+          if (db.customers) setCustomers(db.customers);
+          if (db.products) setProducts(db.products);
+          if (db.categories) setCategories(db.categories);
+          if (db.orders) setOrders(db.orders);
+          if (db.banners) setBanners(db.banners);
+          if (db.resellerBanners) setResellerBanners(db.resellerBanners);
+          if (db.popupImages) setPopupImages(db.popupImages);
+          if (db.sellerApps) setSellerApps(db.sellerApps);
+          if (db.withdrawals) setWithdrawals(db.withdrawals);
+          if (db.specialOffers) setSpecialOffers(db.specialOffers);
+          if (db.deliveryCharges) setDeliveryCharges(db.deliveryCharges);
+          if (db.footerConfig) setFooterConfig(db.footerConfig);
+          if (db.bannerHeight) setBannerHeight(db.bannerHeight);
+          if (db.resellerPageConfig) setResellerPageConfig(db.resellerPageConfig);
+          if (db.resellerSubscriptions) setResellerSubscriptions(db.resellerSubscriptions);
+          if (db.resellerBenefits) setResellerBenefits(db.resellerBenefits);
+          if (db.resellerFAQs) setResellerFAQs(db.resellerFAQs);
+          if (db.advanceConfig) setAdvanceConfig(db.advanceConfig);
+          if (db.promoCodes) setPromoCodes(db.promoCodes);
+          if (db.flashOfferSettings) setFlashOfferSettings(db.flashOfferSettings);
+          if (db.affiliateRatePerClick !== undefined) setAffiliateRatePerClick(db.affiliateRatePerClick);
+          if (db.affiliateMinWithdrawal !== undefined) setAffiliateMinWithdrawal(db.affiliateMinWithdrawal);
+          if (db.affiliateTasks) setAffiliateTasks(db.affiliateTasks);
+          if (db.affiliateSubmissions) setAffiliateSubmissions(db.affiliateSubmissions);
+          if (db.affiliateAccounts) setAffiliateAccounts(db.affiliateAccounts);
+          if (db.resellerReferralReward !== undefined) setResellerReferralReward(db.resellerReferralReward);
+          
+          // Seed back to server if database is currently empty
+          const hasKeys = Object.keys(db).length > 0;
+          if (!hasKeys) {
+            const initialPayload = {
+              users: db.users || initialUsers,
+              customers,
+              products,
+              categories,
+              orders,
+              banners,
+              resellerBanners,
+              popupImages,
+              sellerApps,
+              withdrawals,
+              specialOffers,
+              deliveryCharges,
+              footerConfig,
+              bannerHeight,
+              resellerPageConfig,
+              resellerSubscriptions,
+              resellerBenefits,
+              resellerFAQs,
+              advanceConfig,
+              promoCodes,
+              flashOfferSettings,
+              affiliateRatePerClick,
+              affiliateMinWithdrawal,
+              affiliateTasks,
+              affiliateSubmissions,
+              affiliateAccounts,
+              resellerReferralReward,
+            };
+            await fetch("/api/db/save-bulk", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ payload: initialPayload })
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error loading server data:", err);
+      } finally {
+        setIsSyncInitDone(true);
+      }
+    };
+    
+    loadServerData();
+  }, []);
+
+  // Debounced bulk state persistence to avoid hitting server concurrently on interactive edits or slider actions
+  useEffect(() => {
+    if (!isSyncInitDone) return;
+    
+    const saveAllToServer = async () => {
+      const payload = {
+        users,
+        customers,
+        products,
+        categories,
+        orders,
+        banners,
+        resellerBanners,
+        popupImages,
+        sellerApps,
+        withdrawals,
+        specialOffers,
+        deliveryCharges,
+        footerConfig,
+        bannerHeight,
+        resellerPageConfig,
+        resellerSubscriptions,
+        resellerBenefits,
+        resellerFAQs,
+        advanceConfig,
+        promoCodes,
+        flashOfferSettings,
+        affiliateRatePerClick,
+        affiliateMinWithdrawal,
+        affiliateTasks,
+        affiliateSubmissions,
+        affiliateAccounts,
+        resellerReferralReward,
+      };
+      
+      try {
+        await fetch("/api/db/save-bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ payload })
+        });
+      } catch (err) {
+        console.error("Failed to auto-save bulk updates to server:", err);
+      }
+    };
+
+    const timer = setTimeout(saveAllToServer, 1000);
+    return () => clearTimeout(timer);
+  }, [
+    isSyncInitDone,
+    users,
+    customers,
+    products,
+    categories,
+    orders,
+    banners,
+    resellerBanners,
+    popupImages,
+    sellerApps,
+    withdrawals,
+    specialOffers,
+    deliveryCharges,
+    footerConfig,
+    bannerHeight,
+    resellerPageConfig,
+    resellerSubscriptions,
+    resellerBenefits,
+    resellerFAQs,
+    advanceConfig,
+    promoCodes,
+    flashOfferSettings,
+    affiliateRatePerClick,
+    affiliateMinWithdrawal,
+    affiliateTasks,
+    affiliateSubmissions,
+    affiliateAccounts,
+    resellerReferralReward
+  ]);
+
+  // Periodic background polling to sync modifications done in another browser automatically in real-time
+  useEffect(() => {
+    if (!isSyncInitDone) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/db/get");
+        const json = await res.json();
+        if (json.success && json.data) {
+          const db = json.data;
+          
+          if (db.users && JSON.stringify(db.users) !== JSON.stringify(users)) {
+            setUsers(db.users);
+            if (currentUser) {
+              const refreshed = db.users.find((u: any) => u.id === currentUser.id);
+              if (refreshed && JSON.stringify(refreshed) !== JSON.stringify(currentUser)) {
+                setCurrentUser(refreshed);
+              }
+            }
+          }
+          if (db.customers && JSON.stringify(db.customers) !== JSON.stringify(customers)) {
+            setCustomers(db.customers);
+            if (loggedCustomer) {
+              const refreshed = db.customers.find((c: any) => c.id === loggedCustomer.id);
+              if (refreshed && JSON.stringify(refreshed) !== JSON.stringify(loggedCustomer)) {
+                setLoggedCustomer(refreshed);
+              }
+            }
+          }
+          if (db.products && JSON.stringify(db.products) !== JSON.stringify(products)) setProducts(db.products);
+          if (db.categories && JSON.stringify(db.categories) !== JSON.stringify(categories)) setCategories(db.categories);
+          if (db.orders && JSON.stringify(db.orders) !== JSON.stringify(orders)) setOrders(db.orders);
+          if (db.banners && JSON.stringify(db.banners) !== JSON.stringify(banners)) setBanners(db.banners);
+          if (db.resellerBanners && JSON.stringify(db.resellerBanners) !== JSON.stringify(resellerBanners)) setResellerBanners(db.resellerBanners);
+          if (db.popupImages && JSON.stringify(db.popupImages) !== JSON.stringify(popupImages)) setPopupImages(db.popupImages);
+          if (db.sellerApps && JSON.stringify(db.sellerApps) !== JSON.stringify(sellerApps)) setSellerApps(db.sellerApps);
+          if (db.withdrawals && JSON.stringify(db.withdrawals) !== JSON.stringify(withdrawals)) setWithdrawals(db.withdrawals);
+          if (db.specialOffers && JSON.stringify(db.specialOffers) !== JSON.stringify(specialOffers)) setSpecialOffers(db.specialOffers);
+          if (db.deliveryCharges && JSON.stringify(db.deliveryCharges) !== JSON.stringify(deliveryCharges)) setDeliveryCharges(db.deliveryCharges);
+          if (db.footerConfig && JSON.stringify(db.footerConfig) !== JSON.stringify(footerConfig)) setFooterConfig(db.footerConfig);
+          if (db.bannerHeight && db.bannerHeight !== bannerHeight) setBannerHeight(db.bannerHeight);
+          if (db.resellerPageConfig && JSON.stringify(db.resellerPageConfig) !== JSON.stringify(resellerPageConfig)) setResellerPageConfig(db.resellerPageConfig);
+          if (db.resellerSubscriptions && JSON.stringify(db.resellerSubscriptions) !== JSON.stringify(resellerSubscriptions)) setResellerSubscriptions(db.resellerSubscriptions);
+          if (db.resellerBenefits && JSON.stringify(db.resellerBenefits) !== JSON.stringify(resellerBenefits)) setResellerBenefits(db.resellerBenefits);
+          if (db.resellerFAQs && JSON.stringify(db.resellerFAQs) !== JSON.stringify(resellerFAQs)) setResellerFAQs(db.resellerFAQs);
+          if (db.advanceConfig && JSON.stringify(db.advanceConfig) !== JSON.stringify(advanceConfig)) setAdvanceConfig(db.advanceConfig);
+          if (db.promoCodes && JSON.stringify(db.promoCodes) !== JSON.stringify(promoCodes)) setPromoCodes(db.promoCodes);
+          if (db.flashOfferSettings && JSON.stringify(db.flashOfferSettings) !== JSON.stringify(flashOfferSettings)) setFlashOfferSettings(db.flashOfferSettings);
+          if (db.affiliateRatePerClick !== undefined && db.affiliateRatePerClick !== affiliateRatePerClick) setAffiliateRatePerClick(db.affiliateRatePerClick);
+          if (db.affiliateMinWithdrawal !== undefined && db.affiliateMinWithdrawal !== affiliateMinWithdrawal) setAffiliateMinWithdrawal(db.affiliateMinWithdrawal);
+          if (db.affiliateTasks && JSON.stringify(db.affiliateTasks) !== JSON.stringify(affiliateTasks)) setAffiliateTasks(db.affiliateTasks);
+          if (db.affiliateSubmissions && JSON.stringify(db.affiliateSubmissions) !== JSON.stringify(affiliateSubmissions)) setAffiliateSubmissions(db.affiliateSubmissions);
+          if (db.affiliateAccounts && JSON.stringify(db.affiliateAccounts) !== JSON.stringify(affiliateAccounts)) setAffiliateAccounts(db.affiliateAccounts);
+          if (db.resellerReferralReward !== undefined && db.resellerReferralReward !== resellerReferralReward) setResellerReferralReward(db.resellerReferralReward);
+        }
+      } catch (err) {
+        console.error("Error polling server updates:", err);
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [
+    isSyncInitDone,
+    users,
+    customers,
+    products,
+    categories,
+    orders,
+    banners,
+    resellerBanners,
+    popupImages,
+    sellerApps,
+    withdrawals,
+    specialOffers,
+    deliveryCharges,
+    footerConfig,
+    bannerHeight,
+    resellerPageConfig,
+    resellerSubscriptions,
+    resellerBenefits,
+    resellerFAQs,
+    advanceConfig,
+    promoCodes,
+    flashOfferSettings,
+    affiliateRatePerClick,
+    affiliateMinWithdrawal,
+    affiliateTasks,
+    affiliateSubmissions,
+    affiliateAccounts,
+    resellerReferralReward,
+    currentUser,
+    loggedCustomer
+  ]);
 
   useEffect(() => {
     localStorage.setItem('orivian_v4_reseller_ref_reward', resellerReferralReward.toString());
